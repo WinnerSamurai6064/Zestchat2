@@ -2,7 +2,7 @@
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../../lib/core/theme/app_theme.dart';
+import '../../core/theme/app_theme.dart';
 
 // ─── Glass Card ───────────────────────────────────────────────────────────────
 class GlassCard extends StatelessWidget {

@@ -1,0 +1,84 @@
+name: zestchat
+description: ZestChat — Hyper-optimized, web-first chat application.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Networking
+  http: ^1.2.1
+  web_socket_channel: ^3.0.1
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^14.1.4
+
+  # Image handling
+  image_picker: ^1.1.2
+  image_cropper: ^7.0.4
+  cached_network_image: ^3.3.1
+  flutter_image_compress: ^2.3.0
+
+  # Audio
+  record: ^5.1.2
+  audioplayers: ^6.0.0
+  path_provider: ^2.1.3
+  permission_handler: ^11.3.1
+
+  # Storage
+  shared_preferences: ^2.3.1
+  flutter_secure_storage: ^9.2.2
+
+  # UI / Glassmorphism
+  glassmorphism: ^3.0.0
+  blur: ^4.0.0
+  shimmer: ^3.0.0
+  flutter_animate: ^4.5.0
+  lottie: ^3.1.2
+  cupertino_icons: ^1.0.8
+
+  # Utils
+  intl: ^0.19.0
+  uuid: ^4.4.0
+  timeago: ^3.6.1
+  emoji_picker_flutter: ^2.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.11
+  riverpod_generator: ^2.4.3
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
+    - assets/wallpapers/
+
+  fonts:
+    - family: Syne
+      fonts:
+        - asset: assets/fonts/Syne-Regular.ttf
+        - asset: assets/fonts/Syne-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Syne-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Syne-ExtraBold.ttf
+          weight: 800
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500

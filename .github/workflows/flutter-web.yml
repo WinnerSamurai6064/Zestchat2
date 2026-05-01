@@ -1,0 +1,143 @@
+# .github/workflows/flutter-web.yml
+#
+# ZestChat — Flutter Web CI/CD
+# Triggers on push to main.
+# Builds the Flutter Web app and deploys build/web to the gh-pages branch.
+#
+# Required repository secrets / variables:
+#   None for GitHub Pages. If deploying to a custom server, add:
+#     DEPLOY_SSH_KEY   — private SSH key with access to the server
+#     DEPLOY_HOST      — server hostname
+#     DEPLOY_PATH      — remote target path
+
+name: Flutter Web — Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: flutter-web-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.22.0"
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # BUILD
+  # ─────────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build Flutter Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: ⬇️  Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐦  Setup Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: 📦  Install dependencies
+        run: flutter pub get
+
+      - name: 🔍  Analyze code
+        run: flutter analyze --no-fatal-infos
+        continue-on-error: true  # don't block on lint warnings
+
+      - name: 🧪  Run tests
+        run: flutter test --no-pub
+        continue-on-error: true  # keep deploying even if tests fail during dev
+
+      - name: 🏗️  Build Flutter Web (release, CanvasKit renderer)
+        run: |
+          flutter build web \
+            --release \
+            --web-renderer canvaskit \
+            --dart-define=FLUTTER_WEB_CANVASKIT_URL=https://unpkg.com/canvaskit-wasm@0.38.0/bin/ \
+            --source-maps \
+            --no-pub
+
+      # Inject 404.html for SPA routing (needed for GitHub Pages / Netlify)
+      - name: 🔀  Generate 404.html for SPA routing
+        run: cp build/web/index.html build/web/404.html
+
+      - name: 📤  Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: build/web/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # DEPLOY TO GITHUB PAGES  (runs only on push to main, not on PRs)
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy-github-pages:
+    name: Deploy → GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+
+    # Grant GITHUB_TOKEN the pages write permission
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: ⬇️  Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build
+          path: build/web
+
+      - name: 🚀  Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "deploy: ${{ github.sha }} — ${{ github.event.head_commit.message }}"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # OPTIONAL: Deploy to custom server via rsync over SSH
+  # Uncomment and configure DEPLOY_* secrets if you prefer this over Pages.
+  # ─────────────────────────────────────────────────────────────────────────────
+  # deploy-custom-server:
+  #   name: Deploy → Custom Server (rsync)
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #
+  #   steps:
+  #     - name: ⬇️  Download build artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: flutter-web-build
+  #         path: build/web
+  #
+  #     - name: 🔑  Setup SSH key
+  #       run: |
+  #         mkdir -p ~/.ssh
+  #         echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+  #         chmod 600 ~/.ssh/id_rsa
+  #         ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+  #
+  #     - name: 🚀  rsync to server
+  #       run: |
+  #         rsync -avz --delete \
+  #           build/web/ \
+  #           deploy@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}

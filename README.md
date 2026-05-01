@@ -99,6 +99,7 @@ All responses log `x-trace-id` to the Flutter console via `dart:developer`.
 
 ## Setup
 
+
 ```bash
 # Install Flutter 3.22+ then:
 flutter pub get

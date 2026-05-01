@@ -73,7 +73,7 @@ jobs:
           curl -sLo assets/fonts/JetBrainsMono-Medium.ttf  "$JBBASE/JetBrainsMono-Medium.ttf"
 
       - name: 🏗️  Build Flutter Web (release, CanvasKit renderer)
-        run: flutter build web --release --web-renderer canvaskit --no-pub
+        run: flutter build web --release --web-renderer html --no-pub --base-href "/zestchat/"
 
       # Inject 404.html for SPA routing (needed for GitHub Pages / Netlify)
       - name: 🔀  Generate 404.html for SPA routing

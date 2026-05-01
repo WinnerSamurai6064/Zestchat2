@@ -58,14 +58,22 @@ jobs:
         run: flutter test --no-pub
         continue-on-error: true  # keep deploying even if tests fail during dev
 
-      - name: 🏗️  Build Flutter Web (release, CanvasKit renderer)
-        run: |
-          flutter build web \
-            --release \
-            --web-renderer canvaskit \
+      - name: 📁  Create asset directories
+        run: mkdir -p assets/images assets/icons assets/animations assets/wallpapers assets/fonts
 
-            --source-maps \
-            --no-pub
+      - name: 🔤  Download fonts (Syne + JetBrainsMono)
+        run: |
+          BASE="https://github.com/google/fonts/raw/main/ofl"
+          curl -sLo assets/fonts/Syne-Regular.ttf    "$BASE/syne/Syne%5BwghtdOPS%5D.ttf"
+          curl -sLo assets/fonts/Syne-Medium.ttf     "$BASE/syne/Syne%5BwghtdOPS%5D.ttf"
+          curl -sLo assets/fonts/Syne-Bold.ttf       "$BASE/syne/Syne%5BwghtdOPS%5D.ttf"
+          curl -sLo assets/fonts/Syne-ExtraBold.ttf  "$BASE/syne/Syne%5BwghtdOPS%5D.ttf"
+          JBBASE="https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf"
+          curl -sLo assets/fonts/JetBrainsMono-Regular.ttf "$JBBASE/JetBrainsMono-Regular.ttf"
+          curl -sLo assets/fonts/JetBrainsMono-Medium.ttf  "$JBBASE/JetBrainsMono-Medium.ttf"
+
+      - name: 🏗️  Build Flutter Web (release, CanvasKit renderer)
+        run: flutter build web --release --web-renderer canvaskit --no-pub
 
       # Inject 404.html for SPA routing (needed for GitHub Pages / Netlify)
       - name: 🔀  Generate 404.html for SPA routing

@@ -61,24 +61,10 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # Asset directories created in repo via .gitkeep
+  # Fonts downloaded at CI time via workflow — see flutter-web.yml
   assets:
     - assets/images/
     - assets/icons/
     - assets/animations/
     - assets/wallpapers/
-
-  fonts:
-    - family: Syne
-      fonts:
-        - asset: assets/fonts/Syne-Regular.ttf
-        - asset: assets/fonts/Syne-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/Syne-Bold.ttf
-          weight: 700
-        - asset: assets/fonts/Syne-ExtraBold.ttf
-          weight: 800
-    - family: JetBrainsMono
-      fonts:
-        - asset: assets/fonts/JetBrainsMono-Regular.ttf
-        - asset: assets/fonts/JetBrainsMono-Medium.ttf
-          weight: 500

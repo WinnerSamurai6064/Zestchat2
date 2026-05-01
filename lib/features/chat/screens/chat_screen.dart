@@ -1,572 +1,583 @@
-// lib/features/chat/screens/chat_screen.dart
+// lib/features/home/screens/home_screen.dart
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/models.dart';
-import '../../../core/services/api_service.dart';
 import '../../../shared/widgets/glass_widgets.dart';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-final _mockMessages = <ChatMessage>[
-  _msg('0', 'Hello! How's everything?', isMine: false, minsAgo: 22),
-  _msg('1', 'all good! just shipped a new build', isMine: true, minsAgo: 20),
-  _msg('2', 'Nice! What stack?', isMine: false, minsAgo: 19),
-  _msg('3', 'Rust on the backend, Flutter web up front', isMine: true, minsAgo: 17),
-  _msg('4', 'oh wait you're that person 😂', isMine: false, minsAgo: 15),
-  _msg('5', 'lol yes, ephemeral data and all', isMine: true, minsAgo: 14),
-  _msg('6', 'sounds wild but cool. send me the link?', isMine: false, minsAgo: 10),
-  _msg('7', 'will do once it goes live tonight', isMine: true, minsAgo: 5),
-];
+// ─── Mock Data (replace with Riverpod providers backed by ApiService) ─────────
+final _mockUsers = List.generate(
+  8,
+  (i) => ZestUser(
+    id: 'u$i',
+    username: '@user_$i',
+    displayName: ['Kira Nova', 'Milo Chen', 'Sasha V', 'Dex Park',
+                   'Zoe Ito', 'Kai Ryu', 'Noa Bell', 'Eli Stone'][i],
+    isOnline: i.isEven,
+  ),
+);
 
-ChatMessage _msg(String id, String text, {required bool isMine, required int minsAgo}) =>
-    ChatMessage(
-      id: id,
-      senderId: isMine ? 'me' : 'them',
-      recipientId: isMine ? 'them' : 'me',
-      type: MessageType.text,
-      content: text,
-      timestamp: DateTime.now().subtract(Duration(minutes: minsAgo)),
-      status: MessageStatus.read,
-      isMine: isMine,
-    );
+final _mockStatuses = List.generate(
+  6,
+  (i) => UserStatus(
+    id: 's$i',
+    author: _mockUsers[i],
+    type: i == 2 ? StatusType.voiceStatus : StatusType.image,
+    data: 'https://picsum.photos/seed/${i * 7}/400/700',
+    createdAt: DateTime.now().subtract(Duration(hours: i + 1)),
+    expiresAt: DateTime.now().add(Duration(hours: 23 - i)),
+    hasSeen: i > 3,
+  ),
+);
 
-// ─── Chat Screen ─────────────────────────────────────────────────────────────
-class ChatScreen extends StatefulWidget {
-  final String peerId;
-  final String peerDisplayName;
+final _mockConversations = List.generate(
+  10,
+  (i) => Conversation(
+    id: 'c$i',
+    peer: _mockUsers[i % _mockUsers.length],
+    lastMessage: [
+      'sounds good, see you then 👋',
+      '🎵 Voice message',
+      'did you see the drop?',
+      'lmaooo okay fair enough',
+      'check this out →',
+      'on my way',
+      '🖼 Photo',
+      'totally agreed tbh',
+      'what time works for you?',
+      'gn!',
+    ][i],
+    lastMessageTime: DateTime.now().subtract(Duration(minutes: i * 13 + 2)),
+    unreadCount: [0, 3, 0, 1, 0, 7, 0, 2, 0, 0][i],
+    lastMessageType: i == 1 ? MessageType.voice : (i == 6 ? MessageType.image : MessageType.text),
+  ),
+);
 
-  const ChatScreen({
-    super.key,
-    required this.peerId,
-    required this.peerDisplayName,
-  });
+// ─── Home Screen ─────────────────────────────────────────────────────────────
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  final _controller = TextEditingController();
-  final _scrollController = ScrollController();
-  final _messages = <ChatMessage>[..._mockMessages];
-  bool _showSelfDestructToast = false;
-  bool _firstMessageSent = false;
-  bool _isRecording = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _sendText() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-
-    setState(() {
-      _messages.add(ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        senderId: 'me',
-        recipientId: widget.peerId,
-        type: MessageType.text,
-        content: text,
-        timestamp: DateTime.now(),
-        status: MessageStatus.sending,
-        isMine: true,
-      ));
-      _controller.clear();
-    });
-
-    // Show self-destruct toast on first message
-    if (!_firstMessageSent) {
-      _firstMessageSent = true;
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) {
-          setState(() => _showSelfDestructToast = true);
-          Future.delayed(const Duration(seconds: 6), () {
-            if (mounted) setState(() => _showSelfDestructToast = false);
-          });
-        }
-      });
-    }
-
-    // Scroll to bottom
-    Future.delayed(const Duration(milliseconds: 80), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-
-    // TODO: call ApiService().sendTextMessage(...)
-  }
+class _HomeScreenState extends State<HomeScreen> {
+  int _tab = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ZestColors.void_black,
-      body: Stack(
-        children: [
-          // ── Wallpaper
-          Positioned.fill(child: _ChatWallpaper()),
+      body: IndexedStack(
+        index: _tab,
+        children: const [
+          _ChatsTab(),
+          _FeedTab(),
+          _ProfileStub(),
+        ],
+      ),
+      bottomNavigationBar: ZestBottomNavBar(
+        currentIndex: _tab,
+        onTap: (i) => setState(() => _tab = i),
+      ),
+    );
+  }
+}
 
-          // ── Main content
-          Column(
+// ════════════════════════════════════════════════════════════════════════════
+// CHATS TAB
+// ════════════════════════════════════════════════════════════════════════════
+class _ChatsTab extends StatelessWidget {
+  const _ChatsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        _ZestAppBar(
+          title: 'ZestChat',
+          actions: [
+            _IconBtn(
+              icon: Icons.search_rounded,
+              onTap: () => context.go('/home/search'),
+            ),
+            _IconBtn(icon: Icons.edit_square, onTap: () {}),
+          ],
+        ),
+        // Status row
+        SliverToBoxAdapter(
+          child: _StatusRow(statuses: _mockStatuses),
+        ),
+        // Section header
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Text(
+              'MESSAGES',
+              style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                    color: ZestColors.textTertiary,
+                    letterSpacing: 2,
+                  ),
+            ),
+          ),
+        ),
+        // Chat list
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (ctx, i) => _ConversationTile(
+              conv: _mockConversations[i],
+              index: i,
+            ),
+            childCount: _mockConversations.length,
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+      ],
+    );
+  }
+}
+
+// ─── Status Row ───────────────────────────────────────────────────────────────
+class _StatusRow extends StatelessWidget {
+  final List<UserStatus> statuses;
+  const _StatusRow({required this.statuses});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 102,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: statuses.length + 1, // +1 for "My Status"
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (ctx, i) {
+          if (i == 0) return const _MyStatusBubble();
+          final s = statuses[i - 1];
+          return _StatusBubble(status: s)
+              .animate()
+              .fadeIn(delay: (i * 60).ms, duration: 300.ms)
+              .slideX(begin: 0.2, end: 0);
+        },
+      ),
+    );
+  }
+}
+
+class _MyStatusBubble extends StatelessWidget {
+  const _MyStatusBubble();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {}, // open story composer
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
             children: [
-              _ChatAppBar(
-                peerName: widget.peerDisplayName,
-                peerId: widget.peerId,
-                onBack: () => context.pop(),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount: _messages.length,
-                  itemBuilder: (ctx, i) {
-                    final msg = _messages[i];
-                    final showDate = i == 0 ||
-                        !_sameDay(_messages[i - 1].timestamp, msg.timestamp);
-                    return Column(
-                      children: [
-                        if (showDate) _DateDivider(date: msg.timestamp),
-                        _MessageBubble(message: msg, index: i),
-                      ],
-                    );
-                  },
+              Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: ZestColors.slate700,
+                  border: Border.all(color: ZestColors.glassBorder, width: 2),
                 ),
+                child: const Icon(Icons.person_rounded,
+                    color: ZestColors.textTertiary, size: 28),
               ),
-              _InputBar(
-                controller: _controller,
-                isRecording: _isRecording,
-                onSend: _sendText,
-                onStartRecording: () => setState(() => _isRecording = true),
-                onStopRecording: () => setState(() => _isRecording = false),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: const BoxDecoration(
+                    color: ZestColors.lemonGreen,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.add_rounded,
+                      color: ZestColors.void_black, size: 16),
+                ),
               ),
             ],
           ),
-
-          // ── Self-destruct toast
-          if (_showSelfDestructToast)
-            Positioned(
-              bottom: 88,
-              left: 20,
-              right: 20,
-              child: _SelfDestructToast(
-                onDismiss: () => setState(() => _showSelfDestructToast = false),
-              ),
-            ),
+          const SizedBox(height: 6),
+          const Text(
+            'My Status',
+            style: TextStyle(color: ZestColors.textSecondary, fontSize: 11),
+          ),
         ],
       ),
     );
   }
-
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-// ─── Wallpaper ────────────────────────────────────────────────────────────────
-class _ChatWallpaper extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0.5, -0.2),
-          radius: 1.4,
-          colors: [
-            Color(0xFF0B1A08),
-            Color(0xFF060608),
-            Color(0xFF06080F),
-          ],
-        ),
-      ),
-      child: CustomPaint(painter: _DotGridPainter()),
-    );
-  }
-}
-
-class _DotGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = ZestColors.lemonGreen.withOpacity(0.03)
-      ..strokeWidth = 1;
-    const spacing = 24.0;
-    for (double x = 0; x < size.width; x += spacing) {
-      for (double y = 0; y < size.height; y += spacing) {
-        canvas.drawCircle(Offset(x, y), 1.2, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ─── App Bar ─────────────────────────────────────────────────────────────────
-class _ChatAppBar extends StatelessWidget {
-  final String peerName;
-  final String peerId;
-  final VoidCallback onBack;
-
-  const _ChatAppBar({
-    required this.peerName,
-    required this.peerId,
-    required this.onBack,
-  });
+class _StatusBubble extends StatelessWidget {
+  final UserStatus status;
+  const _StatusBubble({required this.status});
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 8,
-            bottom: 10,
-            left: 8,
-            right: 16,
-          ),
-          decoration: const BoxDecoration(
-            color: Color(0xCC0D0F14),
-            border: Border(
-              bottom: BorderSide(color: ZestColors.glassBorder, width: 1),
+    return GestureDetector(
+      onTap: () => context.go('/home/status/${status.id}'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 62,
+            height: 62,
+            padding: const EdgeInsets.all(2.5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: status.hasSeen
+                  ? null
+                  : const LinearGradient(
+                      colors: [ZestColors.lemonGreen, Color(0xFF52E5E7)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              color: status.hasSeen ? ZestColors.slate600 : null,
+            ),
+            child: CircleAvatar(
+              backgroundColor: ZestColors.slate700,
+              backgroundImage: status.type == StatusType.image
+                  ? NetworkImage(status.data)
+                  : null,
+              child: status.type == StatusType.voiceStatus
+                  ? const Icon(Icons.mic_rounded,
+                      color: ZestColors.lemonGreen, size: 26)
+                  : null,
             ),
           ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: ZestColors.textPrimary, size: 18),
-                onPressed: onBack,
+          const SizedBox(height: 6),
+          SizedBox(
+            width: 64,
+            child: Text(
+              status.author.displayName.split(' ').first,
+              style: const TextStyle(
+                color: ZestColors.textSecondary,
+                fontSize: 11,
               ),
-              // Avatar
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: ZestColors.slate600,
-                    child: Text(
-                      peerName[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: ZestColors.lemonGreen,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: OnlineDot(isOnline: true),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      peerName,
-                      style: const TextStyle(
-                        color: ZestColors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const Text(
-                      'online',
-                      style: TextStyle(
-                        color: ZestColors.online,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.videocam_outlined,
-                    color: ZestColors.textSecondary),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: const Icon(Icons.more_vert_rounded,
-                    color: ZestColors.textSecondary),
-                onPressed: () {},
-              ),
-            ],
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-// ─── Message Bubble ───────────────────────────────────────────────────────────
-class _MessageBubble extends StatelessWidget {
-  final ChatMessage message;
+// ─── Conversation Tile ────────────────────────────────────────────────────────
+class _ConversationTile extends StatelessWidget {
+  final Conversation conv;
   final int index;
-  const _MessageBubble({required this.message, required this.index});
+  const _ConversationTile({required this.conv, required this.index});
 
   @override
   Widget build(BuildContext context) {
-    final isMine = message.isMine;
+    final lastMsgIcon = switch (conv.lastMessageType) {
+      MessageType.voice => '🎵 ',
+      MessageType.image => '🖼 ',
+      _ => '',
+    };
 
-    return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.72,
+    return GestureDetector(
+      onTap: () => context.go(
+        '/home/chat/${conv.peer.id}',
+        extra: {'name': conv.peer.displayName},
+      ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.transparent,
         ),
-        child: Container(
-          margin: EdgeInsets.only(
-            bottom: 4,
-            left: isMine ? 48 : 0,
-            right: isMine ? 0 : 48,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: isMine ? ZestColors.bubbleSent : ZestColors.bubbleReceived,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(18),
-              topRight: const Radius.circular(18),
-              bottomLeft: Radius.circular(isMine ? 18 : 4),
-              bottomRight: Radius.circular(isMine ? 4 : 18),
-            ),
-            border: Border.all(
-              color: isMine
-                  ? ZestColors.bubbleSentBorder
-                  : ZestColors.bubbleReceivedBorder,
-              width: 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                message.content,
-                style: const TextStyle(
-                  color: ZestColors.textPrimary,
-                  fontSize: 14.5,
-                  height: 1.4,
+        child: Row(
+          children: [
+            // Avatar + online dot
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: ZestColors.slate600,
+                  backgroundImage:
+                      conv.peer.avatarUrl != null
+                          ? NetworkImage(conv.peer.avatarUrl!)
+                          : null,
+                  child: conv.peer.avatarUrl == null
+                      ? Text(
+                          conv.peer.displayName[0].toUpperCase(),
+                          style: const TextStyle(
+                            color: ZestColors.lemonGreen,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                          ),
+                        )
+                      : null,
                 ),
-              ),
-              const SizedBox(height: 3),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+                if (conv.peer.isOnline)
+                  Positioned(
+                    bottom: 1,
+                    right: 1,
+                    child: OnlineDot(isOnline: conv.peer.isOnline),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 14),
+            // Name + last message
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    DateFormat('HH:mm').format(message.timestamp),
+                    conv.peer.displayName,
                     style: const TextStyle(
-                      color: ZestColors.textTertiary,
-                      fontSize: 10,
-                      fontFamily: 'JetBrainsMono',
+                      color: ZestColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
                     ),
                   ),
-                  if (isMine) ...[
-                    const SizedBox(width: 4),
-                    _StatusIcon(status: message.status),
-                  ],
+                  const SizedBox(height: 3),
+                  Text(
+                    '$lastMsgIcon${conv.lastMessage}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: conv.unreadCount > 0
+                          ? ZestColors.textPrimary
+                          : ZestColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: conv.unreadCount > 0
+                          ? FontWeight.w500
+                          : FontWeight.w400,
+                    ),
+                  ),
                 ],
               ),
-            ],
-          ),
-        ).animate().fadeIn(
-              delay: (index * 20).ms,
-              duration: 200.ms,
             ),
-      ),
+            const SizedBox(width: 10),
+            // Time + badge
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  timeago.format(conv.lastMessageTime, locale: 'en_short'),
+                  style: TextStyle(
+                    color: conv.unreadCount > 0
+                        ? ZestColors.lemonGreen
+                        : ZestColors.textTertiary,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                UnreadBadge(count: conv.unreadCount),
+              ],
+            ),
+          ],
+        ),
+      )
+          .animate()
+          .fadeIn(delay: (index * 40).ms, duration: 250.ms)
+          .slideX(begin: 0.05, end: 0),
     );
   }
 }
 
-class _StatusIcon extends StatelessWidget {
-  final MessageStatus status;
-  const _StatusIcon({required this.status});
+// ════════════════════════════════════════════════════════════════════════════
+// FEED TAB
+// ════════════════════════════════════════════════════════════════════════════
+class _FeedTab extends StatelessWidget {
+  const _FeedTab();
 
   @override
   Widget build(BuildContext context) {
-    return switch (status) {
-      MessageStatus.sending  => const SizedBox(
-          width: 12, height: 12,
-          child: CircularProgressIndicator(
-              strokeWidth: 1.5,
-              color: ZestColors.textTertiary)),
-      MessageStatus.sent     => const Icon(Icons.check_rounded,
-          size: 13, color: ZestColors.textTertiary),
-      MessageStatus.delivered => const Icon(Icons.done_all_rounded,
-          size: 13, color: ZestColors.textTertiary),
-      MessageStatus.read     => const Icon(Icons.done_all_rounded,
-          size: 13, color: ZestColors.lemonGreen),
-      MessageStatus.failed   => const Icon(Icons.error_outline_rounded,
-          size: 13, color: ZestColors.error),
-    };
+    return CustomScrollView(
+      slivers: [
+        _ZestAppBar(title: 'Discover', actions: [
+          _IconBtn(icon: Icons.tune_rounded, onTap: () {}),
+        ]),
+        // Statuses horizontal strip
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+                child: Text(
+                  'LIVE UPDATES',
+                  style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                        color: ZestColors.textTertiary,
+                        letterSpacing: 2,
+                      ),
+                ),
+              ),
+              _StatusRow(statuses: _mockStatuses),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: Text(
+                  'PEOPLE YOU MAY KNOW',
+                  style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                        color: ZestColors.textTertiary,
+                        letterSpacing: 2,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Recommendations grid
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverGrid(
+            delegate: SliverChildBuilderDelegate(
+              (ctx, i) => _RecommendationCard(user: _mockUsers[i % _mockUsers.length], index: i),
+              childCount: 12,
+            ),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.78,
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+      ],
+    );
   }
 }
 
-// ─── Date Divider ─────────────────────────────────────────────────────────────
-class _DateDivider extends StatelessWidget {
-  final DateTime date;
-  const _DateDivider({required this.date});
+class _RecommendationCard extends StatelessWidget {
+  final ZestUser user;
+  final int index;
+  const _RecommendationCard({required this.user, required this.index});
 
   @override
   Widget build(BuildContext context) {
-    final label = _label(date);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        children: [
-          const Expanded(child: Divider(color: ZestColors.glassBorder)),
-          const SizedBox(width: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: ZestColors.slate700.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: ZestColors.glassBorder),
+    final colors = [
+      const Color(0xFF1A2B0D),
+      const Color(0xFF0D1A2B),
+      const Color(0xFF1A0D2B),
+      const Color(0xFF2B0D1A),
+    ];
+
+    return GestureDetector(
+      onTap: () => context.go(
+        '/home/chat/${user.id}',
+        extra: {'name': user.displayName},
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: Container(
+            decoration: BoxDecoration(
+              color: colors[index % colors.length].withOpacity(0.8),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: ZestColors.glassBorder, width: 1),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 70,
+                      height: 70,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [ZestColors.lemonGreenDim, Color(0xFF1A8080)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                    ),
+                    CircleAvatar(
+                      radius: 32,
+                      backgroundColor: ZestColors.slate600,
+                      child: Text(
+                        user.displayName[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: ZestColors.lemonGreen,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 24,
+                        ),
+                      ),
+                    ),
+                    if (user.isOnline)
+                      Positioned(
+                        bottom: 2,
+                        right: 2,
+                        child: OnlineDot(isOnline: user.isOnline),
+                      ),
+                  ],
                 ),
-                child: Text(
-                  label,
+                const SizedBox(height: 12),
+                Text(
+                  user.displayName,
+                  style: const TextStyle(
+                    color: ZestColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  user.username,
                   style: const TextStyle(
                     color: ZestColors.textTertiary,
                     fontSize: 11,
-                    letterSpacing: 0.3,
                   ),
                 ),
-              ),
+                const SizedBox(height: 12),
+                _AddButton(onTap: () {}),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
-          const Expanded(child: Divider(color: ZestColors.glassBorder)),
-        ],
-      ),
+        ),
+      )
+          .animate()
+          .fadeIn(delay: (index * 50).ms, duration: 300.ms)
+          .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1)),
     );
-  }
-
-  String _label(DateTime d) {
-    final now = DateTime.now();
-    if (d.year == now.year && d.month == now.month && d.day == now.day) {
-      return 'Today';
-    }
-    final yesterday = now.subtract(const Duration(days: 1));
-    if (d.year == yesterday.year &&
-        d.month == yesterday.month &&
-        d.day == yesterday.day) {
-      return 'Yesterday';
-    }
-    return DateFormat('MMM d, yyyy').format(d);
   }
 }
 
-// ─── Input Bar ────────────────────────────────────────────────────────────────
-class _InputBar extends StatelessWidget {
-  final TextEditingController controller;
-  final bool isRecording;
-  final VoidCallback onSend;
-  final VoidCallback onStartRecording;
-  final VoidCallback onStopRecording;
-
-  const _InputBar({
-    required this.controller,
-    required this.isRecording,
-    required this.onSend,
-    required this.onStartRecording,
-    required this.onStopRecording,
-  });
+class _AddButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(
-            12,
-            10,
-            12,
-            10 + MediaQuery.of(context).padding.bottom,
-          ),
-          decoration: const BoxDecoration(
-            color: Color(0xCC0D0F14),
-            border: Border(
-              top: BorderSide(color: ZestColors.glassBorder, width: 1),
-            ),
-          ),
-          child: Row(
-            children: [
-              // Emoji
-              _CircleIconBtn(
-                icon: Icons.emoji_emotions_outlined,
-                onTap: () {},
-              ),
-              const SizedBox(width: 8),
-              // Text field
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  style: const TextStyle(
-                    color: ZestColors.textPrimary,
-                    fontSize: 15,
-                  ),
-                  maxLines: 4,
-                  minLines: 1,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    hintText: isRecording ? 'Recording…' : 'Message',
-                    hintStyle: const TextStyle(color: ZestColors.textTertiary),
-                    filled: true,
-                    fillColor: ZestColors.slate700,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(22),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(22),
-                      borderSide: const BorderSide(
-                          color: ZestColors.glassBorder, width: 1),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(22),
-                      borderSide: const BorderSide(
-                          color: ZestColors.lemonGreen, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.attach_file_rounded,
-                          color: ZestColors.textTertiary, size: 20),
-                      onPressed: () {},
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Mic / Send
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: controller.text.isNotEmpty
-                    ? _SendBtn(onTap: onSend)
-                    : _MicBtn(
-                        isRecording: isRecording,
-                        onStart: onStartRecording,
-                        onStop: onStopRecording,
-                      ),
-              ),
-            ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+        decoration: BoxDecoration(
+          color: ZestColors.lemonGreen.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: ZestColors.lemonGreen.withOpacity(0.40), width: 1),
+        ),
+        child: const Text(
+          'Add',
+          style: TextStyle(
+            color: ZestColors.lemonGreen,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
           ),
         ),
       ),
@@ -574,123 +585,79 @@ class _InputBar extends StatelessWidget {
   }
 }
 
-class _CircleIconBtn extends StatelessWidget {
+// ─── Stub Profile ─────────────────────────────────────────────────────────────
+class _ProfileStub extends StatelessWidget {
+  const _ProfileStub();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text(
+        'Profile Screen',
+        style: TextStyle(color: ZestColors.textSecondary),
+      ),
+    );
+  }
+}
+
+// ─── Shared App Bar ───────────────────────────────────────────────────────────
+class _ZestAppBar extends StatelessWidget {
+  final String title;
+  final List<Widget> actions;
+
+  const _ZestAppBar({required this.title, this.actions = const []});
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverAppBar(
+      floating: true,
+      snap: true,
+      backgroundColor: ZestColors.void_black,
+      expandedHeight: 64,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.fromLTRB(20, 0, 16, 14),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'Syne',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: ZestColors.textPrimary,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+            ...actions,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _CircleIconBtn({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: ZestColors.slate700,
-            shape: BoxShape.circle,
-            border: Border.all(color: ZestColors.glassBorder, width: 1),
-          ),
-          child: Icon(icon, color: ZestColors.textSecondary, size: 20),
-        ),
-      );
-}
-
-class _SendBtn extends StatelessWidget {
-  final VoidCallback onTap;
-  const _SendBtn({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        key: const ValueKey('send'),
-        onTap: onTap,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: const BoxDecoration(
-            color: ZestColors.lemonGreen,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.send_rounded,
-              color: ZestColors.void_black, size: 20),
-        ),
-      );
-}
-
-class _MicBtn extends StatelessWidget {
-  final bool isRecording;
-  final VoidCallback onStart;
-  final VoidCallback onStop;
-  const _MicBtn({
-    required this.isRecording,
-    required this.onStart,
-    required this.onStop,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        key: const ValueKey('mic'),
-        onLongPressStart: (_) => onStart(),
-        onLongPressEnd: (_) => onStop(),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: isRecording
-                ? ZestColors.error.withOpacity(0.2)
-                : ZestColors.slate700,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isRecording ? ZestColors.error : ZestColors.glassBorder,
-              width: 1,
-            ),
-          ),
-          child: Icon(
-            isRecording ? Icons.stop_rounded : Icons.mic_none_rounded,
-            color: isRecording ? ZestColors.error : ZestColors.textSecondary,
-            size: 22,
-          ),
-        ),
-      );
-}
-
-// ─── Self-Destruct Toast ──────────────────────────────────────────────────────
-class _SelfDestructToast extends StatelessWidget {
-  final VoidCallback onDismiss;
-  const _SelfDestructToast({required this.onDismiss});
+  const _IconBtn({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-      borderRadius: 16,
-      opacity: 0.14,
-      child: Row(
-        children: [
-          const Text('💥', style: TextStyle(fontSize: 20)),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'WARNING: Due to extreme server congestion, this chat will completely self-destruct in 7 days… We totally don\'t keep this forever.',
-              style: TextStyle(
-                color: ZestColors.textSecondary,
-                fontSize: 11.5,
-                height: 1.4,
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close_rounded,
-                color: ZestColors.textTertiary, size: 16),
-            onPressed: onDismiss,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          ),
-        ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        margin: const EdgeInsets.only(left: 6),
+        decoration: BoxDecoration(
+          color: ZestColors.slate700,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: ZestColors.glassBorder, width: 1),
+        ),
+        child: Icon(icon, color: ZestColors.textSecondary, size: 18),
       ),
-    )
-        .animate()
-        .fadeIn(duration: 300.ms)
-        .slideY(begin: 0.3, end: 0, curve: Curves.easeOutCubic);
+    );
   }
 }

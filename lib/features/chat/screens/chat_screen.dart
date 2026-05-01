@@ -14,7 +14,7 @@ import '../../../shared/widgets/glass_widgets.dart';
 // ─── Mock data ────────────────────────────────────────────────────────────────
 final _mockMessages = <ChatMessage>[
   _msg('0', 'Hello! How's everything?', isMine: false, minsAgo: 22),
-  _msg('1', 'all good! just shipped a new build 🚀', isMine: true, minsAgo: 20),
+  _msg('1', 'all good! just shipped a new build', isMine: true, minsAgo: 20),
   _msg('2', 'Nice! What stack?', isMine: false, minsAgo: 19),
   _msg('3', 'Rust on the backend, Flutter web up front', isMine: true, minsAgo: 17),
   _msg('4', 'oh wait you're that person 😂', isMine: false, minsAgo: 15),

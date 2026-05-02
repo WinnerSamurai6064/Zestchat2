@@ -1,354 +1,119 @@
-// lib/features/auth/screens/login_screen.dart
+// lib/core/router/app_router.dart
 
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../shared/widgets/glass_widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+import '../../features/auth/screens/login_screen.dart';
+import '../../features/auth/screens/register_screen.dart';
+import '../../features/home/screens/home_screen.dart';
+import '../../features/chat/screens/chat_screen.dart';
+import '../../features/status/screens/status_viewer_screen.dart';
+import '../../features/profile/screens/profile_screen.dart';
+import '../../features/search/screens/search_screen.dart';
 
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final _userCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  bool _obscure = true;
-  bool _loading = false;
-
-  Future<void> _login() async {
-    if (_userCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) return;
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (mounted) {
-      setState(() => _loading = false);
-      context.go('/home');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ZestColors.void_black,
-      body: Stack(
-        children: [
-          // Background gradient
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(-0.3, -0.6),
-                  radius: 1.2,
-                  colors: [Color(0xFF0F2008), ZestColors.void_black],
-                ),
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/login',
+    debugLogDiagnostics: true,
+    redirect: (context, state) {
+      // If we land on '/' redirect to login
+      if (state.uri.path == '/') return '/login';
+      return null;
+    },
+    errorBuilder: (ctx, state) => Scaffold(
+      backgroundColor: const Color(0xFF060608),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('404', style: TextStyle(color: Color(0xFFCCF143), fontSize: 48, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text(state.uri.path, style: const TextStyle(color: Color(0xFF8890AB), fontSize: 13)),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () => ctx.go('/login'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(color: const Color(0xFFCCF143), borderRadius: BorderRadius.circular(12)),
+                child: const Text('Go Home', style: TextStyle(color: Color(0xFF060608), fontWeight: FontWeight.w700)),
               ),
-            ),
+            )
+          ],
+        ),
+      ),
+    ),
+    routes: [
+      GoRoute(
+        path: '/login',
+        name: 'login',
+        pageBuilder: (ctx, state) => _fade(const LoginScreen(), state),
+      ),
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        pageBuilder: (ctx, state) => _fade(const RegisterScreen(), state),
+      ),
+      GoRoute(
+        path: '/home',
+        name: 'home',
+        pageBuilder: (ctx, state) => _fade(const HomeScreen(), state),
+        routes: [
+          GoRoute(
+            path: 'search',
+            name: 'search',
+            pageBuilder: (ctx, state) => _slide(const SearchScreen(), state),
           ),
-          // Decorative glow
-          Positioned(
-            top: -80,
-            right: -60,
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    ZestColors.lemonGreen.withOpacity(0.12),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
+          GoRoute(
+            path: 'chat/:peerId',
+            name: 'chat',
+            pageBuilder: (ctx, state) {
+              final peerId = state.pathParameters['peerId']!;
+              final peerName = state.uri.queryParameters['name'] ?? 'Chat';
+              return _slide(
+                ChatScreen(peerId: peerId, peerDisplayName: peerName),
+                state,
+              );
+            },
           ),
-          // Content
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 48),
-                  // Logo
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: ZestColors.lemonGreen,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.bolt_rounded,
-                            color: ZestColors.void_black, size: 28),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'ZestChat',
-                        style: TextStyle(
-                          color: ZestColors.textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ],
-                  ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.2),
-
-                  const SizedBox(height: 48),
-
-                  Text(
-                    'Welcome\nback.',
-                    style: Theme.of(context)
-                        .textTheme
-                        .displayLarge!
-                        .copyWith(height: 1.1),
-                  )
-                      .animate()
-                      .fadeIn(delay: 100.ms, duration: 400.ms)
-                      .slideY(begin: 0.1),
-
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Sign in to continue.',
-                    style: TextStyle(
-                        color: ZestColors.textSecondary, fontSize: 15),
-                  ).animate().fadeIn(delay: 150.ms),
-
-                  const SizedBox(height: 40),
-
-                  // Card
-                  GlassCard(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        _Field(
-                          controller: _userCtrl,
-                          hint: '@username',
-                          icon: Icons.alternate_email_rounded,
-                        ),
-                        const SizedBox(height: 12),
-                        _Field(
-                          controller: _passCtrl,
-                          hint: 'Password',
-                          icon: Icons.lock_outline_rounded,
-                          obscure: _obscure,
-                          suffix: IconButton(
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: ZestColors.textTertiary,
-                              size: 18,
-                            ),
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        _PrimaryBtn(
-                          label: 'Sign In',
-                          loading: _loading,
-                          onTap: _login,
-                        ),
-                      ],
-                    ),
-                  ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
-
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Don't have an account? ",
-                        style: TextStyle(color: ZestColors.textSecondary),
-                      ),
-                      GestureDetector(
-                        onTap: () => context.go('/register'),
-                        child: const Text(
-                          'Sign Up',
-                          style: TextStyle(
-                            color: ZestColors.lemonGreen,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ).animate().fadeIn(delay: 300.ms),
-                ],
-              ),
-            ),
+          GoRoute(
+            path: 'status/:statusId',
+            name: 'status',
+            pageBuilder: (ctx, state) {
+              final statusId = state.pathParameters['statusId']!;
+              return _fade(StatusViewerScreen(statusId: statusId), state);
+            },
+          ),
+          GoRoute(
+            path: 'profile',
+            name: 'profile',
+            pageBuilder: (ctx, state) => _slide(const ProfileScreen(), state),
           ),
         ],
       ),
+    ],
+  );
+});
+
+CustomTransitionPage<void> _fade(Widget child, GoRouterState state) =>
+    CustomTransitionPage(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 280),
+      transitionsBuilder: (ctx, anim, _, c) =>
+          FadeTransition(opacity: anim, child: c),
     );
-  }
-}
 
-// ─── Register Screen ──────────────────────────────────────────────────────────
-// lib/features/auth/screens/register_screen.dart (included in same file for brevity)
-class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
-
-  @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
-}
-
-class _RegisterScreenState extends State<RegisterScreen> {
-  final _nameCtrl = TextEditingController();
-  final _userCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  bool _loading = false;
-
-  Future<void> _register() async {
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (mounted) {
-      setState(() => _loading = false);
-      context.go('/home');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ZestColors.void_black,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: ZestColors.textPrimary),
-          onPressed: () => context.go('/login'),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              Text('Create account.',
-                  style: Theme.of(context).textTheme.displayMedium),
-              const SizedBox(height: 6),
-              const Text('Join ZestChat today.',
-                  style: TextStyle(
-                      color: ZestColors.textSecondary, fontSize: 15)),
-              const SizedBox(height: 32),
-              GlassCard(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    _Field(
-                        controller: _nameCtrl,
-                        hint: 'Display Name',
-                        icon: Icons.badge_outlined),
-                    const SizedBox(height: 12),
-                    _Field(
-                        controller: _userCtrl,
-                        hint: '@username',
-                        icon: Icons.alternate_email_rounded),
-                    const SizedBox(height: 12),
-                    _Field(
-                        controller: _passCtrl,
-                        hint: 'Password',
-                        icon: Icons.lock_outline_rounded,
-                        obscure: true),
-                    const SizedBox(height: 20),
-                    _PrimaryBtn(
-                        label: 'Create Account',
-                        loading: _loading,
-                        onTap: _register),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+CustomTransitionPage<void> _slide(Widget child, GoRouterState state) =>
+    CustomTransitionPage(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 320),
+      transitionsBuilder: (ctx, anim, _, c) {
+        final tween = Tween(
+          begin: const Offset(1.0, 0.0),
+          end: Offset.zero,
+        ).chain(CurveTween(curve: Curves.easeOutCubic));
+        return SlideTransition(position: anim.drive(tween), child: c);
+      },
     );
-  }
-}
-
-// ─── Shared form widgets ──────────────────────────────────────────────────────
-class _Field extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final IconData icon;
-  final bool obscure;
-  final Widget? suffix;
-
-  const _Field({
-    required this.controller,
-    required this.hint,
-    required this.icon,
-    this.obscure = false,
-    this.suffix,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      style: const TextStyle(color: ZestColors.textPrimary),
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: Icon(icon, color: ZestColors.textTertiary, size: 18),
-        suffixIcon: suffix,
-      ),
-    );
-  }
-}
-
-class _PrimaryBtn extends StatelessWidget {
-  final String label;
-  final bool loading;
-  final VoidCallback onTap;
-  const _PrimaryBtn({
-    required this.label,
-    required this.loading,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: loading ? null : onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        height: 52,
-        decoration: BoxDecoration(
-          color: loading
-              ? ZestColors.lemonGreenDim
-              : ZestColors.lemonGreen,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Center(
-          child: loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: ZestColors.void_black,
-                  ),
-                )
-              : Text(
-                  label,
-                  style: const TextStyle(
-                    color: ZestColors.void_black,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-}

@@ -16,6 +16,33 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/login',
     debugLogDiagnostics: true,
+    redirect: (context, state) {
+      // If we land on '/' redirect to login
+      if (state.uri.path == '/') return '/login';
+      return null;
+    },
+    errorBuilder: (ctx, state) => Scaffold(
+      backgroundColor: const Color(0xFF060608),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('404', style: TextStyle(color: Color(0xFFCCF143), fontSize: 48, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text(state.uri.path, style: const TextStyle(color: Color(0xFF8890AB), fontSize: 13)),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () => ctx.go('/login'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(color: const Color(0xFFCCF143), borderRadius: BorderRadius.circular(12)),
+                child: const Text('Go Home', style: TextStyle(color: Color(0xFF060608), fontWeight: FontWeight.w700)),
+              ),
+            )
+          ],
+        ),
+      ),
+    ),
     routes: [
       GoRoute(
         path: '/login',
@@ -35,16 +62,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'search',
             name: 'search',
-            pageBuilder: (ctx, state) =>
-                _slide(const SearchScreen(), state),
+            pageBuilder: (ctx, state) => _slide(const SearchScreen(), state),
           ),
           GoRoute(
             path: 'chat/:peerId',
             name: 'chat',
             pageBuilder: (ctx, state) {
               final peerId = state.pathParameters['peerId']!;
-              final peerName =
-                  state.uri.queryParameters['name'] ?? 'Chat';
+              final peerName = state.uri.queryParameters['name'] ?? 'Chat';
               return _slide(
                 ChatScreen(peerId: peerId, peerDisplayName: peerName),
                 state,
@@ -56,10 +81,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'status',
             pageBuilder: (ctx, state) {
               final statusId = state.pathParameters['statusId']!;
-              return _fade(
-                StatusViewerScreen(statusId: statusId),
-                state,
-              );
+              return _fade(StatusViewerScreen(statusId: statusId), state);
             },
           ),
           GoRoute(
@@ -70,11 +92,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
     ],
-    errorBuilder: (ctx, state) => Scaffold(
-      body: Center(
-        child: Text('Route not found: ${state.uri}'),
-      ),
-    ),
   );
 });
 
